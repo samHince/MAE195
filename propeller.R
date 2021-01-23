@@ -1,6 +1,9 @@
 # Script created by Sam Hince
 # 01/11/2021
 
+
+library(varhandle)
+
 ##########################################################################
 
 # nomenclature:
@@ -17,27 +20,111 @@
 ##########################################################################
 
 
-## define constants 
+##########################################################################
 
-V <- 100 # m / s volocity
-Omega <- (2 * pi * 2000) / 60 # rad / s angular velocity of the propeller
-R <- 1 # radius along the prop
-B <- 2 # number of blades
+## read in data files
+setwd("/home/sam/Documents/classGitRepos/MAE195")
+geom <- read.csv(file = './propSpecs/CESSNA150PROP.csv', header = FALSE)
+coef <- read.csv(file = './propSpecs/NACA4415_RN500K_NCRIT9.csv', header = TRUE)
 
-# https://www.engineeringtoolbox.com/air-absolute-kinematic-viscosity-d_601.html
-mu <- 18 * 10^(-6) # N s/m^2 dynamic viscosity of the fluid
+goem_general <- t(geom[1:8,1:2])
+colnames(goem_general) = goem_general[1,]
+goem_general <- as.data.frame(goem_general[])
+goem_general <- goem_general[-1,]
+goem_general <- unfactor(goem_general)
+	
+goem_station <- as.data.frame(geom[10:nrow(geom),1:3])
+goem_station <- unfactor(goem_station)
+colnames(goem_station) = goem_station[1,]
+goem_station <- goem_station[-1,]
+row.names(goem_station) <- 1:nrow(goem_station)
+goem_station$R <- as.numeric(goem_station$R)
+goem_station$CHORD <- as.numeric(goem_station$CHORD)
+goem_station$BETA <- as.numeric(goem_station$BETA)
 
-rho <- 1.225 # kg/m^3 density of air
+##########################################################################
 
-signma <- (B*c)/(2*pi*r)# local solidity # used in step 6 
+mu <- goem_general$KIN_VISC * goem_general$DENSITY # N s/m^2 dynamic viscosity of the fluid
 
+rho <- goem_general$DENSITY # kg/m^3 density of air
+
+B <- goem_general$BLADES # number of blades
+
+R <- goem_general$DIAMETER / 2 # radius along the prop
+
+V <- goem_general$VELOCITY # m / s volocity
+
+Omega <- (2 * pi * goem_general$RPM) / 60 # rad / s angular velocity of the propeller
+
+
+##########################################################################
 ## ass-umptions
 
 beta <- 20 * (pi / 180) # blade angle is this given???
 
 ## calculate relevant starting conditions
 
-# run eqn 1
+##########################################################################
+# equation 1:
+eqn_phi <- function(){
+	phi <- atan2((V*(1+a))/(Omega*r(1-aprime))) # should this be atan2? 
+	return(phi)
+}
+
+eqn_phi_estimate <- function(V, Omega, r){
+	phi <- atan2(V/(Omega*r)) # initial phi condition (step 1)
+	return(phi)
+}
+
+# quations 2:
+eqn_alpha <- function(){
+	alpha <- beta - phi
+	return(alpha)
+}
+
+eqn_W <- function(V, a, phi){
+	W <- (V * (1 + a)) / sin(phi)
+	return(W)
+}
+
+eqn_Re <- function(){
+	Re <- rho * W * (c / mu)
+	return(Re)
+}
+
+# equation 3: 
+eqn_Cx <- function(){
+	Cx <- (Cl * sin(phi)) + (Cd * cos(phi))
+	return(Cx)
+}
+
+eqn_Cy <- function(){
+	Cy <- (Cl * cos(phi)) - (Cd * sin(phi))
+	return(Cy)
+}
+
+# equation 4:
+eqn_a <- function(){
+	a <- ((sigma/(4*varF))*(Cy/(sin(phi)^2))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)^2))))
+	return()
+}
+
+eqn_aprime <- function(){
+	aprime <- ((sigma/(4*varF))*(Cx/(sin(phi)*cos(phi)))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)*cos(phi)))))
+	return()
+}
+
+##########################################################################
+
+for (r in goem_station$R){
+	sprintf("Blade station: %g", r)
+	
+	#step 1
+	phi <- eqn_phi_estimate(V, Omega, r)
+}
+
+phi <- eqn_phi_estimate(V, Omega, r)
+
 
 # run eqn 2
 
@@ -62,25 +149,5 @@ varF <- (2/pi)acos(exp(-f)) # pi could be something else
 
 ## loop
 
-# equation 1: maybe dont loop? 
+signma <- (B*c)/(2*pi*r) # local solidity # used in step 6 
 
-phi <- atan2((V*(1+a))/(Omega*r(1-aprime))) # should this be atan2? 
-
-phi <- atan2(V/(Omega*r)) # initial phi condition (step 1)
-
-# quations 2:
-	
-alpha <- beta - phi
-
-W <- V * (1 + a) * sin(phi)
-Re <- rho * W * (c / mu)
-
-# equation 3: 
-
-Cy <- (Cl * cos(phi)) - (Cd * sin(phi))
-Cx <- (Cl * sin(phi)) + (Cd * cos(phi))
-
-# equation 4:
-
-a <- ((sigma/(4*varF))*(Cy/(sin(phi)^2))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)^2))))
-aprime <- ((sigma/(4*varF))*(Cx/(sin(phi)*cos(phi)))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)*cos(phi)))))
