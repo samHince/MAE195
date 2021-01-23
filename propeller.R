@@ -67,17 +67,17 @@ beta <- 20 * (pi / 180) # blade angle is this given???
 ##########################################################################
 # equation 1:
 eqn_phi <- function(){
-	phi <- atan2((V*(1+a))/(Omega*r(1-aprime))) # should this be atan2? 
+	phi <- atan2((V*(1+a)), (Omega*r(1-aprime))) # should this be atan2? 
 	return(phi)
 }
 
 eqn_phi_estimate <- function(V, Omega, r){
-	phi <- atan2(V/(Omega*r)) # initial phi condition (step 1)
+	phi <- atan2(V, (Omega*r)) # initial phi condition (step 1)
 	return(phi)
 }
 
 # quations 2:
-eqn_alpha <- function(){
+eqn_alpha <- function(beta, phi){
 	alpha <- beta - phi
 	return(alpha)
 }
@@ -87,7 +87,7 @@ eqn_W <- function(V, a, phi){
 	return(W)
 }
 
-eqn_Re <- function(){
+eqn_Re <- function(rho, W, c, mu){
 	Re <- rho * W * (c / mu)
 	return(Re)
 }
@@ -116,11 +116,29 @@ eqn_aprime <- function(){
 
 ##########################################################################
 
-for (r in goem_station$R){
+for (station in 1:nrow(goem_station)){
+	#separate our values for this loop
+	r <- goem_station$R[station]
+	c <- goem_station$CHORD[station]
+	beta <- goem_station$BETA[station] * (pi/180) # convery to rad
+	
 	sprintf("Blade station: %g", r)
 	
 	#step 1
 	phi <- eqn_phi_estimate(V, Omega, r)
+	
+	#step 2
+	alpha <- eqn_alpha(beta, phi)
+	# calculate RN here... should use a, but we dont have it? 
+	
+	#step 3
+	phi_degrees <- phi * (180/pi)
+	Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = phi_degrees, method="linear")$y
+	Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = phi_degrees, method="linear")$y
+	
+	#step 4
+	
+	
 }
 
 phi <- eqn_phi_estimate(V, Omega, r)
