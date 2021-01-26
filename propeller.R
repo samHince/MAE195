@@ -19,6 +19,7 @@ library(varhandle)
 
 ##########################################################################
 
+convergence_minimum <- 0.001
 
 ##########################################################################
 
@@ -66,8 +67,8 @@ beta <- 20 * (pi / 180) # blade angle is this given???
 
 ##########################################################################
 # equation 1:
-eqn_phi <- function(){
-	phi <- atan2((V*(1+a)), (Omega*r(1-aprime))) # should this be atan2? 
+eqn_phi <- function(V, a, Omega, r, aprime){
+	phi <- atan2((V*(1+a)), (Omega*r*(1-aprime))) # should this be atan2? 
 	return(phi)
 }
 
@@ -93,24 +94,24 @@ eqn_Re <- function(rho, W, c, mu){
 }
 
 # equation 3: 
-eqn_Cx <- function(){
+eqn_Cx <- function(Cl, Cd, phi){
 	Cx <- (Cl * sin(phi)) + (Cd * cos(phi))
 	return(Cx)
 }
 
-eqn_Cy <- function(){
+eqn_Cy <- function(Cl, Cd, phi){
 	Cy <- (Cl * cos(phi)) - (Cd * sin(phi))
 	return(Cy)
 }
 
 # equation 4:
-eqn_a <- function(){
+eqn_a <- function(sigma, varF, Cy, phi){
 	a <- ((sigma/(4*varF))*(Cy/(sin(phi)^2))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)^2))))
 	return()
 }
 
-eqn_aprime <- function(){
-	aprime <- ((sigma/(4*varF))*(Cx/(sin(phi)*cos(phi)))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)*cos(phi)))))
+eqn_aprime <- function(sigma, varF, Cx, phi){
+	aprime <- ((sigma/(4*varF))*(Cx/(sin(phi)*cos(phi)))) / (1+(sigma/(4*varF)*(Cx/(sin(phi)*cos(phi)))))
 	return()
 }
 
@@ -125,20 +126,50 @@ for (station in 1:nrow(goem_station)){
 	sprintf("Blade station: %g", r)
 	
 	#step 1
+	# initial assumptions: 
 	phi <- eqn_phi_estimate(V, Omega, r)
+	a <- 0
+	aprime <- 0
 	
-	#step 2
-	alpha <- eqn_alpha(beta, phi)
-	# calculate RN here... should use a, but we dont have it? 
+	convergent <- FALSE
 	
-	#step 3
-	phi_degrees <- phi * (180/pi)
-	Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = phi_degrees, method="linear")$y
-	Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = phi_degrees, method="linear")$y
+	while(convergent == FALSE){
+		#step 2
+		alpha <- eqn_alpha(beta, phi)
+		W <- eqn_W(V, a, phi)
+		Re <- eqn_Re(rho, W, c, mu)
+		
+		#step 3
+		phi_degrees <- phi * (180/pi)
+		Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = phi_degrees, method="linear")$y
+		Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = phi_degrees, method="linear")$y
+		
+		#step 4
+		Cx <- eqn_Cx(Cl, Cd, phi)
+		Cy <- eqn_Cy(Cl, Cd, phi)
+		
+		#step 5
+		phit <- atan((r/R)*tan(phi)) # atan or atan2? 
+		f <- (B/2)*((1-(r/R)) / ((sin(phit))^2))
+		varF <- (2/pi) * acos(exp(-f)) 
+		
+		#step 6
+		sigma <- (B*c)/(2*pi*r) # local solidity
+		
+		a <- eqn_a(sigma, varF, Cy, phi)				
+		aprime <- eqn_aprime(sigma, varF, Cx, phi)
+		
+		#step 7
+		phi_new <- eqn_phi(V, a, Omega, r, aprime)
+		
+		if(abs(phi - phi_new) < convergence_minimum){
+			convergent <- TRUE
+		}
+		
+		phi <- phi + (0.4 * (phiNew - phi)) # 0.4 is variable, recopmended value by liebeck 
+	}
 	
-	#step 4
-	
-	
+	#record data
 }
 
 phi <- eqn_phi_estimate(V, Omega, r)
@@ -159,13 +190,10 @@ phi <- eqn_phi_estimate(V, Omega, r)
 phi <- phiOld + (0.4 * (phiNew - phiOld)) # 0.4 is variable, recopmended value by liebeck 
 # until it converges 
 
-# 
-phit <- atan2((r/R)*tan(phi)) # atan or atan2? 
-f <- (B/2)*((1-(r/R))/((sin(phit))^2))
-varF <- (2/pi)acos(exp(-f)) # pi could be something else
+
 
 
 ## loop
 
-signma <- (B*c)/(2*pi*r) # local solidity # used in step 6 
+ # used in step 6 
 
