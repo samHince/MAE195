@@ -19,7 +19,7 @@ library(varhandle)
 
 ##########################################################################
 
-convergence_minimum <- 0.001
+convergence_minimum <- 0.00000000000001
 
 ##########################################################################
 
@@ -107,15 +107,17 @@ eqn_Cy <- function(Cl, Cd, phi){
 # equation 4:
 eqn_a <- function(sigma, varF, Cy, phi){
 	a <- ((sigma/(4*varF))*(Cy/(sin(phi)^2))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)^2))))
-	return()
+	return(a)
 }
 
 eqn_aprime <- function(sigma, varF, Cx, phi){
 	aprime <- ((sigma/(4*varF))*(Cx/(sin(phi)*cos(phi)))) / (1+(sigma/(4*varF)*(Cx/(sin(phi)*cos(phi)))))
-	return()
+	return(aprime)
 }
 
 ##########################################################################
+
+df <- data.frame()
 
 for (station in 1:nrow(goem_station)){
 	#separate our values for this loop
@@ -140,9 +142,9 @@ for (station in 1:nrow(goem_station)){
 		Re <- eqn_Re(rho, W, c, mu)
 		
 		#step 3
-		phi_degrees <- phi * (180/pi)
-		Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = phi_degrees, method="linear")$y
-		Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = phi_degrees, method="linear")$y
+		alpha_degrees <- alpha * (180/pi)
+		Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = alpha_degrees, method="linear")$y
+		Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = alpha_degrees, method="linear")$y
 		
 		#step 4
 		Cx <- eqn_Cx(Cl, Cd, phi)
@@ -151,7 +153,8 @@ for (station in 1:nrow(goem_station)){
 		#step 5
 		phit <- atan((r/R)*tan(phi)) # atan or atan2? 
 		f <- (B/2)*((1-(r/R)) / ((sin(phit))^2))
-		varF <- (2/pi) * acos(exp(-f)) 
+		#varF <- (2/pi) * acos(exp(-f)) 
+		varF <- (2/pi) * atan((exp(2*f))^(1/2))
 		
 		#step 6
 		sigma <- (B*c)/(2*pi*r) # local solidity
@@ -162,33 +165,23 @@ for (station in 1:nrow(goem_station)){
 		#step 7
 		phi_new <- eqn_phi(V, a, Omega, r, aprime)
 		
-		if(abs(phi - phi_new) < convergence_minimum){
-			convergent <- TRUE
-		}
+		#step 8
+		percent_change <- (abs(phi - phi_new)/phi)
 		
-		phi <- phi + (0.4 * (phiNew - phi)) # 0.4 is variable, recopmended value by liebeck 
+		print(sprintf("Percent change in phi: %g%%", percent_change * 100))
+		
+		if(percent_change < convergence_minimum){ 	# if the percent change has decreased enough 
+			convergent <- TRUE  					# then assume we have reached convergence
+		} else {									# otherwise increment phi
+			phi <- phi + (0.4 * (phi_new - phi)) # 0.4 is variable, recopmended value by liebeck 
+		}
 	}
 	
 	#record data
+	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), phi * (180/pi), Re / 1000000, a))
+	
 }
 
-phi <- eqn_phi_estimate(V, Omega, r)
-
-
-# run eqn 2
-
-# get cl and cd -- digitize plots and figure that out 
-
-# run eqn 3
-
-# run eqn 4
-
-# run the other part of eqn 1
-
-# repeat with:
-
-phi <- phiOld + (0.4 * (phiNew - phiOld)) # 0.4 is variable, recopmended value by liebeck 
-# until it converges 
 
 
 
