@@ -10,16 +10,12 @@ library(varhandle)
 # V = velocity of aircraft
 # phi = 
 # Omega = 
-#
-#
 # B = number of blade
-# R = radius along blade
-#
-#
+# r = radius along blade
 
 ##########################################################################
 
-convergence_minimum <- 0.00000000000001
+convergence_minimum <- 0.00001
 
 ##########################################################################
 
@@ -125,7 +121,7 @@ for (station in 1:nrow(goem_station)){
 	c <- goem_station$CHORD[station]
 	beta <- goem_station$BETA[station] * (pi/180) # convery to rad
 	
-	sprintf("Blade station: %g", r)
+	print(sprintf("Blade station: %g", r))
 	
 	#step 1
 	# initial assumptions: 
@@ -134,7 +130,7 @@ for (station in 1:nrow(goem_station)){
 	aprime <- 0
 	
 	convergent <- FALSE
-	
+	loops_to_converge <- 0
 	while(convergent == FALSE){
 		#step 2
 		alpha <- eqn_alpha(beta, phi)
@@ -168,25 +164,72 @@ for (station in 1:nrow(goem_station)){
 		#step 8
 		percent_change <- (abs(phi - phi_new)/phi)
 		
-		print(sprintf("Percent change in phi: %g%%", percent_change * 100))
-		
 		if(percent_change < convergence_minimum){ 	# if the percent change has decreased enough 
 			convergent <- TRUE  					# then assume we have reached convergence
+			print(sprintf("Phi converged in %g loops", loops_to_converge))
 		} else {									# otherwise increment phi
 			phi <- phi + (0.4 * (phi_new - phi)) # 0.4 is variable, recopmended value by liebeck 
+			loops_to_converge <- loops_to_converge + 1
 		}
 	}
 	
 	#record data
-	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), phi * (180/pi), Re / 1000000, a))
+	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), alpha_degrees, phi * (180/pi), Re / 1000000, a, W, Cx, Cy, Cl/Cd))
 	
 }
 
+#reformat data
+colnames(df) <- c("station", "r", "c", "beta", "alpha", "phi", "Re", "a", "W", "Cx", "Cy", "L/D")
+print(df)
 
+#step 9
+dr <- goem_station$R[2]-goem_station$R[1]
 
+#Ct: 
+thrust <- 0
 
+integral <- 0
+for(station in 1:(nrow(goem_station)-1)){
+	#separate our values for this loop
+	c <- goem_station$CHORD[station]
+	W <- df$W[station]
+	Cy <- df$Cy[station]
+	a <- df$a[station]
+	
+	u <- V * (1 + a)
+	
+	coef_term <- (1/(rho * (u^2) * ((2*R)^4)))
+	
+	d <- ((1/2) * rho * (W^2) * B * c * Cy * dr)
+	thrust <- thrust + d
+	integral <- (integral + (coef_term * d))
+}
 
-## loop
+Ct <-  integral
 
- # used in step 6 
+print(Ct)
+
+#Cp: 
+
+integral <- 0
+for(station in 1:(nrow(goem_station)-1)){
+	#separate our values for this loop
+	r <- df$r[station]
+	c <- goem_station$CHORD[station]
+	W <- df$W[station]
+	Cx <- df$Cx[station]
+	a <- df$a[station]
+		
+	u <- V * (1 + a)
+	
+	coef_term <- (1/(rho * (u^2) * ((2*R)^5)))
+	
+	d <- ((1/2) * rho * (W^2) * B * c * Cx * r * dr)
+	integral <- (integral + (coef_term * d))
+}
+
+Cp <- integral
+
+print(Cp)
+
 
