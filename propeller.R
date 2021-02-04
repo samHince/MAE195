@@ -118,8 +118,14 @@ df <- data.frame()
 for (station in 1:nrow(goem_station)){
 	#separate our values for this loop
 	r <- goem_station$R[station]
+	Xi <- r/R
 	c <- goem_station$CHORD[station]
 	beta <- goem_station$BETA[station] * (pi/180) # convery to rad
+	
+	# correction for final blade station:
+	if(Xi >= 1){
+		Xi <- 1 - 1e-15
+	}
 	
 	print(sprintf("Blade station: %g", r))
 	
@@ -147,16 +153,19 @@ for (station in 1:nrow(goem_station)){
 		Cy <- eqn_Cy(Cl, Cd, phi)
 		
 		#step 5
-		phit <- atan((r/R)*tan(phi)) # atan or atan2? 
-		f <- (B/2)*((1-(r/R)) / ((sin(phit))^2))
-		#varF <- (2/pi) * acos(exp(-f)) 
-		varF <- (2/pi) * atan((exp(2*f))^(1/2))
+		phit <- atan((Xi)*tan(phi)) # atan or atan2? 
+		f <- (B/2)*((1-(Xi)) / ((sin(phit))^2))
+		varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
 		
 		#step 6
 		sigma <- (B*c)/(2*pi*r) # local solidity
-		
 		a <- eqn_a(sigma, varF, Cy, phi)				
 		aprime <- eqn_aprime(sigma, varF, Cx, phi)
+		
+		# corrections for finite tip chord:
+		if((abs(a) > .7) || (abs(aprime) > .7)){
+			aprime = 0.4
+		}
 		
 		#step 7
 		phi_new <- eqn_phi(V, a, Omega, r, aprime)
@@ -168,25 +177,27 @@ for (station in 1:nrow(goem_station)){
 			convergent <- TRUE  					# then assume we have reached convergence
 			print(sprintf("Phi converged in %g loops", loops_to_converge))
 		} else {									# otherwise increment phi
-			phi <- phi + (0.4 * (phi_new - phi)) # 0.4 is variable, recopmended value by liebeck 
+			phi <- phi + (0.4 * (phi_new - phi))    # 0.4 is variable, recopmended value by liebeck 
 			loops_to_converge <- loops_to_converge + 1
 		}
 	}
 	
 	#record data
-	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), alpha_degrees, phi * (180/pi), Re / 1000000, a, W, Cx, Cy, Cl/Cd))
+	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), alpha_degrees, phi * (180/pi), Re / 1000000, a, aprime, f, varF, W, Cx, Cy, Cl/Cd))
 	
 }
 
 #reformat data
-colnames(df) <- c("station", "r", "c", "beta", "alpha", "phi", "Re", "a", "W", "Cx", "Cy", "L/D")
+colnames(df) <- c("station", "r", "c", "beta", "alpha", "phi", "Re", "a", "aprime", "f", "F", "W", "Cx", "Cy", "L/D")
 print(df)
 
 #step 9
 dr <- goem_station$R[2]-goem_station$R[1]
 
+n <- goem_general$RPM / 60 
+
 #Ct: 
-thrust <- 0
+coef_term <- (1/(rho * (n^2) * ((2*R)^4)))
 
 integral <- 0
 for(station in 1:(nrow(goem_station)-1)){
@@ -194,22 +205,18 @@ for(station in 1:(nrow(goem_station)-1)){
 	c <- goem_station$CHORD[station]
 	W <- df$W[station]
 	Cy <- df$Cy[station]
-	a <- df$a[station]
-	
-	u <- V * (1 + a)
-	
-	coef_term <- (1/(rho * (u^2) * ((2*R)^4)))
-	
+
 	d <- ((1/2) * rho * (W^2) * B * c * Cy * dr)
-	thrust <- thrust + d
-	integral <- (integral + (coef_term * d))
+	integral <- integral + d
 }
 
-Ct <-  integral
+thrust <- integral
+Ct <-  integral * coef_term
 
-print(Ct)
+print((sprintf("Ct: %g", Ct)))
 
 #Cp: 
+coef_term <- (1/(rho * (n^3) * ((2*R)^5)))
 
 integral <- 0
 for(station in 1:(nrow(goem_station)-1)){
@@ -218,18 +225,13 @@ for(station in 1:(nrow(goem_station)-1)){
 	c <- goem_station$CHORD[station]
 	W <- df$W[station]
 	Cx <- df$Cx[station]
-	a <- df$a[station]
-		
-	u <- V * (1 + a)
 	
-	coef_term <- (1/(rho * (u^2) * ((2*R)^5)))
-	
-	d <- ((1/2) * rho * (W^2) * B * c * Cx * r * dr)
-	integral <- (integral + (coef_term * d))
+	d <- ((1/2) * rho * (W^2) * B * c * Cx * Omega * r * dr) # Omega missing in the notes
+	integral <- integral + d
 }
 
-Cp <- integral
+Cp <- integral * coef_term
 
-print(Cp)
+print((sprintf("Cp: %g", Cp)))
 
 
