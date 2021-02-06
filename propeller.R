@@ -1,14 +1,14 @@
 # Script created by Sam Hince
 # 01/11/2021
 
-
 library(varhandle)
+library(rjson)
 
 ##########################################################################
 
 # nomenclature:
 # V = velocity of aircraft
-# phi = 
+# phi = angle...
 # Omega = 
 # B = number of blade
 # r = radius along blade
@@ -19,49 +19,28 @@ convergence_minimum <- 0.00001
 
 ##########################################################################
 
-## read in data files
+## read in data from json
 setwd("/home/sam/Documents/classGitRepos/MAE195")
-geom <- read.csv(file = './propSpecs/CESSNA150PROP.csv', header = FALSE)
+geom <- fromJSON(file = './propSpecs/P51_Mustang.json') # Cessna 150.json
 coef <- read.csv(file = './propSpecs/NACA4415_RN500K_NCRIT9.csv', header = TRUE)
 
-goem_general <- t(geom[1:8,1:2])
-colnames(goem_general) = goem_general[1,]
-goem_general <- as.data.frame(goem_general[])
-goem_general <- goem_general[-1,]
-goem_general <- unfactor(goem_general)
-	
-goem_station <- as.data.frame(geom[10:nrow(geom),1:3])
-goem_station <- unfactor(goem_station)
-colnames(goem_station) = goem_station[1,]
-goem_station <- goem_station[-1,]
-row.names(goem_station) <- 1:nrow(goem_station)
-goem_station$R <- as.numeric(goem_station$R)
-goem_station$CHORD <- as.numeric(goem_station$CHORD)
-goem_station$BETA <- as.numeric(goem_station$BETA)
+##########################################################################
+
+## calculate some constants
+mu <- geom$alt$kinematicViscosity * geom$alt$density   # N s/m^2 dynamic viscosity of the fluid
+rho <- geom$alt$density                                # kg/m^3 density of air
+B <- geom$blades                                       # number of blades
+R <- geom$diameter / 2                                 # radius along the prop
+V <- geom$velocity                                     # m / s volocity
+Omega <- (2 * pi * geom$RPM) / 60                      # rad / s angular velocity of the propeller
 
 ##########################################################################
 
-mu <- goem_general$KIN_VISC * goem_general$DENSITY # N s/m^2 dynamic viscosity of the fluid
-
-rho <- goem_general$DENSITY # kg/m^3 density of air
-
-B <- goem_general$BLADES # number of blades
-
-R <- goem_general$DIAMETER / 2 # radius along the prop
-
-V <- goem_general$VELOCITY # m / s volocity
-
-Omega <- (2 * pi * goem_general$RPM) / 60 # rad / s angular velocity of the propeller
-
-
-##########################################################################
 ## ass-umptions
-
 beta <- 20 * (pi / 180) # blade angle is this given???
 
-## calculate relevant starting conditions
-
 ##########################################################################
+
 # equation 1:
 eqn_phi <- function(V, a, Omega, r, aprime){
 	phi <- atan2((V*(1+a)), (Omega*r*(1-aprime))) # should this be atan2? 
@@ -115,12 +94,12 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
 
 df <- data.frame()
 
-for (station in 1:nrow(goem_station)){
+for (station in 1:length(geom$radialStation)){
 	#separate our values for this loop
-	r <- goem_station$R[station]
+	r <- geom$radialStation[station]
 	Xi <- r/R
-	c <- goem_station$CHORD[station]
-	beta <- goem_station$BETA[station] * (pi/180) # convery to rad
+	c <- geom$chord[station]
+	beta <- geom$beta[station] * (pi/180) # convery to rad
 	
 	# correction for final blade station:
 	if(Xi >= 1){
@@ -192,17 +171,16 @@ colnames(df) <- c("station", "r", "c", "beta", "alpha", "phi", "Re", "a", "aprim
 print(df)
 
 #step 9
-dr <- goem_station$R[2]-goem_station$R[1]
-
-n <- goem_general$RPM / 60 
+dr <- geom$radialStation[2]-geom$radialStation[1]
+n <- geom$RPM / 60 
 
 #Ct: 
 coef_term <- (1/(rho * (n^2) * ((2*R)^4)))
 
 integral <- 0
-for(station in 1:(nrow(goem_station)-1)){
+for(station in 1:(length(geom$radialStation)-1)){
 	#separate our values for this loop
-	c <- goem_station$CHORD[station]
+	c <- geom$chord[station]
 	W <- df$W[station]
 	Cy <- df$Cy[station]
 
@@ -219,10 +197,10 @@ print((sprintf("Ct: %g", Ct)))
 coef_term <- (1/(rho * (n^3) * ((2*R)^5)))
 
 integral <- 0
-for(station in 1:(nrow(goem_station)-1)){
+for(station in 1:(length(geom$radialStation)-1)){
 	#separate our values for this loop
-	r <- df$r[station]
-	c <- goem_station$CHORD[station]
+	r <- geom$radialStation[station] #df$r[station]
+	c <- geom$chord[station]
 	W <- df$W[station]
 	Cx <- df$Cx[station]
 	
@@ -233,5 +211,3 @@ for(station in 1:(nrow(goem_station)-1)){
 Cp <- integral * coef_term
 
 print((sprintf("Cp: %g", Cp)))
-
-
