@@ -1,71 +1,141 @@
 # Script created by Sam Hince
 # 02/04/2021
 
+library(caTools)
+library(tictoc)
+
 ##########################################################################
+tic()
+
+setwd("/home/sam/Documents/classGitRepos/MAE195")
 
 #givens
-D
-B
-V
-RPM
-Airfoil
-Thrust or power
+name <- "DC-7"
+D <- 14 #ft
+D_hud <- 1.5 #ft
+B <- 4 #number of blades
+V <- 400 #mph 500
+power <- 4500 #BHp  
+# thrust <- 0
+RPM <- 1250 #3200
+rho <- 0.0011 #0.002378 20kft
+kinetic_viscosity <- 2.9*10^(-4)
+airfoil <- "./propSpecs/NACA4415_RN500K_NCRIT9.csv"
 
+# settings
+Cl <- rep(0.7, 21)
+sucessThreshold <- 0.001 
+steps <- 21
+
+##########################################################################
+# conversions
 Omega <- RPM * (1/60) * (2*pi)
-mu <- goem_general$KIN_VISC * goem_general$DENSITY # N s/m^2 dynamic viscosity of the fluid
+R <- D/2
+
+mu <- kinetic_viscosity * rho # N s/m^2 dynamic viscosity of the fluid
+stations <- seq(from = (D_hud/2), to = R, length.out = steps)
+
+V <- V * 1.467 # convert to ft/s
+power <- power * 550 # convert to ft*lb/s
+
+##########################################################################
+# data read 
+coef <- read.csv(file = airfoil, header = TRUE)
 
 ##########################################################################
 
-# monenclature 
-# delta = non dimensional veloicty 
-# Omega = angular velocity in radians per second 
+#step 1 # starting value for zeta
+zeta <- 0  
 
-##########################################################################
+### loop start ###
+while(TRUE){
+  #step 2 # determine F and phi at each station
+  df <- data.frame(Xi=numeric(), f=numeric(), varF=numeric(), phit=numeric(), phi=numeric())
+  
+  for(r in stations){
+    Xi <- r/R 
+    
+    phit <- atan((V/(Omega*R)) * (1 + (zeta/2))) # atan or atan2? 
+    
+    f <- (B/2)*((1-(Xi)) / (sin(phit))) # ((sin(phit))^2))
+    varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
+    
+    # useing r*tan(phi) = R*tan(phit) = const
+    phi <- atan2(tan(phit),Xi) # phi <- atan2(R*tan(phit),r)
+    
+    # save results
+    df <- rbind(df, data.frame(Xi, f, varF, phit, phi))
+  }
+  
+  #step 3
+  X <- (Omega * stations)/V # (Omega * r)/V
+  G <- df$varF*X*sin(df$phi)*(cos(df$phi))
+  
+  Wc <- (4*pi*(V^2)*G*zeta)/(B*Omega*Cl)
+  Rn <- (rho * Wc) / mu
+  
+  #step 4
+  alpha <- approx(x = coef$CL, y = coef$ALPHA, xout = Cl, method="linear", ties=min)$y
+  Cd <- approx(x = coef$CL, y = coef$CD, xout = Cl, method="linear", ties=min)$y
+  
+  alpha <- alpha * (pi/180) # convert to radians
+  epsilon <- Cd/Cl # viscous effects
+  
+  #step 5
+  a <- (zeta / 2) * (cos(df$phi)^2) * (1 - (epsilon*tan(df$phi)))
+  aprime <- (zeta / (2*X)) * cos(df$phi) * sin(df$phi) * (1 + (epsilon / tan(df$phi))) 
+  
+  #step 6
+  W <- (V * (1+a))/sin(df$phi)
+  
+  #step 7
+  c <- Wc/W
+  beta <- alpha + df$phi
+  
+  #step 8
+  lambda <- V/(Omega*R)
+  I1_integrand <- 4*df$Xi*G*(1-(epsilon*tan(df$phi)))
+  I2_integrand <- lambda*(I1_integrand/(2*df$Xi))*(1+(epsilon/tan(df$phi)))*sin(df$phi)*cos(df$phi)
+  J1_integrand <- 4*df$Xi*G*(1+(epsilon/tan(df$phi)))
+  J2_integrand <- (J1_integrand/2)*(1-(epsilon/tan(df$phi)))*(cos(df$phi)^2)
+  
+  #integrate
+  I1 <- trapz(df$Xi, I1_integrand)
+  I2 <- trapz(df$Xi, I2_integrand)
+  J1 <- trapz(df$Xi, J1_integrand)
+  J2 <- trapz(df$Xi, J2_integrand)
+  
+  # step 9
+  if(exists("thrust")){
+    # use thrust definition
+    Tc <- (2*thrust)/(rho*(V^2)*pi*(R^2))
+    zeta_new <- (I1/(2*I2)) - (((I1/(2*I2))^2)-(Tc/I2))^(1/2)
+    Pc <- (zeta*J1) + ((zeta^2)*J2) # (4*zeta*J1) + (2*(zeta^2)*J2)
+  }else{
+    # use power definition
+    Pc <- (2*power)/(rho*(V^3)*pi*(R^2))
+    zeta_new <- (-1 * (J1/(2*J2))) + (((J1/(2*J2))^2)+(Pc/J2))^(1/2)
+    Tc <- (zeta*I1) - ((zeta^2)*I2) # (4*zeta*I1) - (2*(zeta^2)*I2)
+  }
+  
+  # step 10 - is zeta is no within 0.1% start back at step 2
+  zeta_change <- abs((zeta_new - zeta) / zeta)
+  zeta <- zeta_new
+  print(zeta)
+  if(zeta_change < sucessThreshold){
+    break
+  }
+  
+} # end of loop 
 
+# step 11
+efficiency <- Tc/Pc
+#eta2*(Tc/Pc) <- ?
+#solidity etx
 
-#step 1 # starting value for delta
-delta <- 0  
+# step 12
+# output geom
 
-#step 2 # determine F and phi at each station
-for(stations){
-	phit <- atan((V/(Omega*R)) * (1 + (delta/2))) # atan or atan2? 
-	
-	f <- (B/2)*((1-(Xi)) / ((sin(phit))^2))
-	varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
-	
-	# useing r*tan(phi) = R*tan(phit) = const
-	phi <- atan2(R*tan(phit),r) # phi <- atan2(tan(phit),Xi)
-}
-
-#step 3
-Wc <- (4*pi*(V^2)*G*delta)/(B*Omega*Cl)
-Rn <- (rho * Wc) / mu
-
-#step 4 # fixxxxxxxx
-alpha_degrees <- alpha * (180/pi)
-Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = alpha_degrees, method="linear")$y
-Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = alpha_degrees, method="linear")$y
-epsilon
-
-#step 5
-X <- (Omega * r)/V
-
-a <- (delta / 2) * (cos(phi)^2) * (1 - (epsilon*tan(phi)))
-aprime <- (delta / (2*X)) * cos(phi) * sin(phi) * (1 + (epsilon / tan(phi))) 
-
-#step 6
-W <- (V * (1+a))/sin(phi)
-
-#step 7
-c <- # from Wc but how? 
-beta <- alpha + phi
-
-#step 8
-I1
-I2
-J1
-J2
-
-
+toc()
 
 
