@@ -17,9 +17,12 @@ B <- 4 #number of blades
 V <- 400 #mph 500
 power <- 4500 #BHp  
 # thrust <- 0
-RPM <- 1250 #3200
-rho <- 0.0011 #0.002378 20kft
+RPM <- 1000 #3200 # 1250
+rho <- 0.0011 #0.002378 20k ft
 kinetic_viscosity <- 2.9*10^(-4)
+gamma <- 1.4 
+gas_const <- 1718
+temp <- 248.56 # from standart atm at 20k ft
 airfoil <- "./propSpecs/NACA4415_RN500K_NCRIT9.csv"
 
 # settings
@@ -130,8 +133,12 @@ while(TRUE){
 
 # step 11
 efficiency <- Tc/Pc
-#eta2*(Tc/Pc) <- ?
-#solidity etx
+
+sigma <- (B * c) / (2 * pi * stations)
+solidity <- trapz(df$Xi, sigma)
+
+AF <- (100000/16)*int(0,R)
+mach <- (Omega * stations) / (sqrt(gamma * gas_const * temp))
 
 # step 12
 # output geom
