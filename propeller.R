@@ -3,6 +3,7 @@
 
 library(varhandle)
 library(rjson)
+library(caTools)
 
 ##########################################################################
 
@@ -21,7 +22,7 @@ convergence_minimum <- 0.00001
 
 ## read in data from json
 setwd("/home/sam/Documents/classGitRepos/MAE195")
-geom <- fromJSON(file = './propSpecs/P51_Mustang.json') # Cessna 150.json
+geom <- fromJSON(file = './propSpecs/DesignOutput.json') # P51_Mustang.json DesignOutput.json
 coef <- read.csv(file = './propSpecs/NACA4415_RN500K_NCRIT9.csv', header = TRUE)
 
 ##########################################################################
@@ -92,122 +93,149 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
 
 ##########################################################################
 
-df <- data.frame()
+dif_power <- geom$power
 
-for (station in 1:length(geom$radialStation)){
-	#separate our values for this loop
-	r <- geom$radialStation[station]
-	Xi <- r/R
-	c <- geom$chord[station]
-	beta <- geom$beta[station] * (pi/180) # convery to rad
-	
-	# correction for final blade station:
-	if(Xi >= 1){
-		Xi <- 1 - 1e-15
-	}
-	
-	print(sprintf("Blade station: %g", r))
-	
-	#step 1
-	# initial assumptions: 
-	phi <- eqn_phi_estimate(V, Omega, r)
-	a <- 0
-	aprime <- 0
-	
-	convergent <- FALSE
-	loops_to_converge <- 0
-	while(convergent == FALSE){
-		#step 2
-		alpha <- eqn_alpha(beta, phi)
-		W <- eqn_W(V, a, phi)
-		Re <- eqn_Re(rho, W, c, mu)
-		
-		#step 3
-		alpha_degrees <- alpha * (180/pi)
-		Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = alpha_degrees, method="linear")$y
-		Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = alpha_degrees, method="linear")$y
-		
-		#step 4
-		Cx <- eqn_Cx(Cl, Cd, phi)
-		Cy <- eqn_Cy(Cl, Cd, phi)
-		
-		#step 5
-		phit <- atan((Xi)*tan(phi)) # atan or atan2? 
-		f <- (B/2)*((1-(Xi)) / ((sin(phit))^2))
-		varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
-		
-		#step 6
-		sigma <- (B*c)/(2*pi*r) # local solidity
-		a <- eqn_a(sigma, varF, Cy, phi)				
-		aprime <- eqn_aprime(sigma, varF, Cx, phi)
-		
-		# corrections for finite tip chord:
-		if((abs(a) > .7) || (abs(aprime) > .7)){
-			aprime = 0.4
-		}
-		
-		#step 7
-		phi_new <- eqn_phi(V, a, Omega, r, aprime)
-		
-		#step 8
-		percent_change <- (abs(phi - phi_new)/phi)
-		
-		if(percent_change < convergence_minimum){ 	# if the percent change has decreased enough 
-			convergent <- TRUE  					# then assume we have reached convergence
-			print(sprintf("Phi converged in %g loops", loops_to_converge))
-		} else {									# otherwise increment phi
-			phi <- phi + (0.4 * (phi_new - phi))    # 0.4 is variable, recopmended value by liebeck 
-			loops_to_converge <- loops_to_converge + 1
-		}
-	}
-	
-	#record data
-	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), alpha_degrees, phi * (180/pi), Re / 1000000, a, aprime, f, varF, W, Cx, Cy, Cl/Cd))
-	
+while((abs(dif_power) / geom$power) > 0.01){ # feathering loop
+
+  df <- data.frame()
+  
+  for (station in 1:length(geom$radialStation)){
+  	#separate our values for this loop
+  	r <- geom$radialStation[station]
+  	Xi <- r/R
+  	c <- geom$chord[station]
+  	beta <- geom$beta[station] * (pi/180) # convery to rad
+  	
+  	# correction for final blade station:
+  	if(Xi >= 1){
+  		Xi <- 1 - 1e-15
+  	}
+  	
+  	#print(sprintf("Blade station: %g", r))
+  	
+  	#step 1
+  	# initial assumptions: 
+  	phi <- eqn_phi_estimate(V, Omega, r)
+  	a <- 0
+  	aprime <- 0
+  	
+  	convergent <- FALSE
+  	loops_to_converge <- 0
+  	while(convergent == FALSE){
+  		#step 2
+  		alpha <- eqn_alpha(beta, phi)
+  		W <- eqn_W(V, a, phi)
+  		Re <- eqn_Re(rho, W, c, mu)
+  		
+  		#step 3
+  		alpha_degrees <- alpha * (180/pi)
+  		Cl <- approx(x = coef$ALPHA, y = coef$CL, xout = alpha_degrees, method="linear")$y
+  		Cd <- approx(x = coef$ALPHA, y = coef$CD, xout = alpha_degrees, method="linear")$y
+  		
+  		#step 4
+  		Cx <- eqn_Cx(Cl, Cd, phi)
+  		Cy <- eqn_Cy(Cl, Cd, phi)
+  		
+  		#step 5
+  		phit <- atan((Xi)*tan(phi)) # atan or atan2? 
+  		f <- (B/2)*((1-(Xi)) / ((sin(phit))^2))
+  		varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
+  		
+  		#step 6
+  		sigma <- (B*c)/(2*pi*r) # local solidity
+  		a <- eqn_a(sigma, varF, Cy, phi)				
+  		aprime <- eqn_aprime(sigma, varF, Cx, phi)
+  		
+  		# corrections for finite tip chord:
+  		if((abs(a) > .7) || (abs(aprime) > .7)){
+  			aprime = 0.4
+  		}
+  		
+  		#step 7
+  		phi_new <- eqn_phi(V, a, Omega, r, aprime)
+  		
+  		#step 8
+  		percent_change <- (abs(phi - phi_new)/phi)
+  		
+  		if(percent_change < convergence_minimum){ 	# if the percent change has decreased enough 
+  			convergent <- TRUE  					# then assume we have reached convergence
+  			#print(sprintf("Phi converged in %g loops", loops_to_converge))
+  		} else {									# otherwise increment phi
+  			phi <- phi + (0.4 * (phi_new - phi))    # 0.4 is variable, recopmended value by liebeck 
+  			loops_to_converge <- loops_to_converge + 1
+  		}
+  	}
+  	
+  	#record data
+  	df <- rbind(df, data.frame(station, r, c, beta * (180/pi), alpha_degrees, phi * (180/pi), Re / 1000000, a, aprime, f, varF, W, Cx, Cy, Cl/Cd))
+  	
+  }
+  
+  #reformat data
+  colnames(df) <- c("station", "r", "c", "beta", "alpha", "phi", "Re", "a", "aprime", "f", "F", "W", "Cx", "Cy", "L/D")
+  #print(df)
+  
+  #step 9
+  dr <- geom$radialStation[2]-geom$radialStation[1]
+  n <- geom$RPM / 60 
+  
+  #Ct: 
+  coef_term <- (1/(rho * (n^2) * ((2*R)^4)))
+  
+  integral <- 0
+  for(station in 1:(length(geom$radialStation)-1)){
+  	#separate our values for this loop
+  	c <- geom$chord[station]
+  	W <- df$W[station]
+  	Cy <- df$Cy[station]
+  
+  	d <- ((1/2) * rho * (W^2) * B * c * Cy * dr)
+  	integral <- integral + d
+  }
+  
+  thrust <- integral
+  Ct <-  integral * coef_term
+  
+  #Cp: 
+  coef_term <- (1/(rho * (n^3) * ((2*R)^5)))
+  
+  integral <- 0
+  for(station in 1:(length(geom$radialStation)-1)){
+  	#separate our values for this loop
+  	r <- geom$radialStation[station] #df$r[station]
+  	c <- geom$chord[station]
+  	W <- df$W[station]
+  	Cx <- df$Cx[station]
+  	
+  	d <- ((1/2) * rho * (W^2) * B * c * Cx * Omega * r * dr) # Omega missing in the notes
+  	integral <- integral + d
+  }
+  
+  power <- integral / 550
+  Cp <- integral * coef_term
+  
+  advance_ratio <- V / (n * geom$diameter) # could use geom$J
+  efficiency <- Ct * advance_ratio / Cp 
+  
+  solidity <- (geom$blades * trapz(geom$radialStation, geom$chord)) / (pi * ((geom$diameter/2)^2))
+  
+  ### feathering stuff ###
+  dif_power <- geom$power - power
+  delta <- (dif_power / abs(dif_power)) * 0.01
+  geom$beta <- geom$beta + delta
 }
 
-#reformat data
-colnames(df) <- c("station", "r", "c", "beta", "alpha", "phi", "Re", "a", "aprime", "f", "F", "W", "Cx", "Cy", "L/D")
-print(df)
-
-#step 9
-dr <- geom$radialStation[2]-geom$radialStation[1]
-n <- geom$RPM / 60 
-
-#Ct: 
-coef_term <- (1/(rho * (n^2) * ((2*R)^4)))
-
-integral <- 0
-for(station in 1:(length(geom$radialStation)-1)){
-	#separate our values for this loop
-	c <- geom$chord[station]
-	W <- df$W[station]
-	Cy <- df$Cy[station]
-
-	d <- ((1/2) * rho * (W^2) * B * c * Cy * dr)
-	integral <- integral + d
-}
-
-thrust <- integral
-Ct <-  integral * coef_term
-
-print((sprintf("Ct: %g", Ct)))
-
-#Cp: 
-coef_term <- (1/(rho * (n^3) * ((2*R)^5)))
-
-integral <- 0
-for(station in 1:(length(geom$radialStation)-1)){
-	#separate our values for this loop
-	r <- geom$radialStation[station] #df$r[station]
-	c <- geom$chord[station]
-	W <- df$W[station]
-	Cx <- df$Cx[station]
-	
-	d <- ((1/2) * rho * (W^2) * B * c * Cx * Omega * r * dr) # Omega missing in the notes
-	integral <- integral + d
-}
-
-Cp <- integral * coef_term
-
+### print output ### 
 print((sprintf("Cp: %g", Cp)))
+print((sprintf("Ct: %g", Ct)))
+print((sprintf("Efficiency: %g", efficiency)))
+print((sprintf("Advance Ratio: %g", advance_ratio)))
+print((sprintf("Power (Hp): %g", power)))
+print((sprintf("Thrust (lbs): %g", thrust)))
+print((sprintf("RPM: %g", geom$RPM)))
+print((sprintf("Solidity: %g", solidity)))
+
+minidf <- data.frame(df$station, df$c, df$beta)
+colnames(minidf) <- c("station", "chord", "beta")
+                  
+print(minidf)

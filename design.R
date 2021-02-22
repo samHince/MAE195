@@ -3,6 +3,7 @@
 
 library(caTools)
 library(tictoc)
+library(rjson)
 
 ##########################################################################
 tic()
@@ -10,14 +11,14 @@ tic()
 setwd("/home/sam/Documents/classGitRepos/MAE195")
 
 #givens
-name <- "DC-7"
-D <- 14 #ft
-D_hud <- 1.5 #ft
+name <- "Must"
+D <- 11.16667 #ft
+D_hud <- 1.5 #ftlibrary
 B <- 4 #number of blades
 V <- 400 #mph 500
-power <- 4500 #BHp  
+power <- 1490 #BHp  
 # thrust <- 0
-RPM <- 1000 #3200 # 1250
+RPM <- 1250 #3200 # 1250
 rho <- 0.0011 #0.002378 20k ft
 kinetic_viscosity <- 2.9*10^(-4)
 gamma <- 1.4 
@@ -112,13 +113,15 @@ while(TRUE){
   if(exists("thrust")){
     # use thrust definition
     Tc <- (2*thrust)/(rho*(V^2)*pi*(R^2))
-    zeta_new <- (I1/(2*I2)) - (((I1/(2*I2))^2)-(Tc/I2))^(1/2)
+    zeta_new <- ((I1/2)*I2) - (((I1/(2*I2))^2)-(Tc/I2))^(1/2)
     Pc <- (zeta*J1) + ((zeta^2)*J2) # (4*zeta*J1) + (2*(zeta^2)*J2)
+    
   }else{
     # use power definition
     Pc <- (2*power)/(rho*(V^3)*pi*(R^2))
     zeta_new <- (-1 * (J1/(2*J2))) + (((J1/(2*J2))^2)+(Pc/J2))^(1/2)
     Tc <- (zeta*I1) - ((zeta^2)*I2) # (4*zeta*I1) - (2*(zeta^2)*I2)
+    
   }
   
   # step 10 - is zeta is no within 0.1% start back at step 2
@@ -132,16 +135,49 @@ while(TRUE){
 } # end of loop 
 
 # step 11
-efficiency <- Tc/Pc
+if(exists("thrust")){
+  power <- Pc * (rho*(V^3)*pi*(R^2)) * (1/2)
+}else{
+  thrust <- Tc * (rho*(V^2)*pi*(R^2)) * (1/2)
+}
 
-sigma <- (B * c) / (2 * pi * stations)
-solidity <- trapz(df$Xi, sigma)
+n <- RPM / 60 
+advance_ratio <- V / (n * D)
+efficiency <- Tc / Pc
 
-AF <- (100000/16)*int(0,R)
+#sigma <- (B * c) / (2 * pi * stations) # local solidity
+#solidity <- trapz(df$Xi, sigma)
+solidity <- (B * trapz(stations, c)) / (pi * (R^2))
+
+AF <- (100000/16)*trapz(df$Xi, ((c/D)*(df$Xi^3)))
 mach <- (Omega * stations) / (sqrt(gamma * gas_const * temp))
 
 # step 12
 # output geom
+ls <- list(propName = name, 
+           diameter = D, 
+           hubDiameter = D_hud, 
+           blades = B, 
+           airfoil = airfoil, 
+           Cl = mean(Cl), 
+           velocity = V, # leave in ft/s
+           J = advance_ratio,
+           RPM = RPM,
+           power = power / 550, # convert to HP
+           thrust = thrust,            
+           Cp = "",
+           Ct = "",
+           solidity = solidity,
+           AF = AF,
+           alt = list(density = rho,
+                      kinematicViscosity = kinetic_viscosity,
+                      speedofsound = sqrt(gamma * gas_const * temp)),
+           radialStation = stations,
+           chord = c,
+           beta = beta * (180/pi))
+
+exportJson <- toJSON(ls)
+write(exportJson, file = './propSpecs/DesignOutput.json')
 
 toc()
 
