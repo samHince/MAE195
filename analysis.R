@@ -4,6 +4,9 @@
 library(varhandle)
 library(rjson)
 library(caTools)
+library(ggplot2)
+
+rm(list = ls())
 
 ##########################################################################
 
@@ -17,6 +20,7 @@ library(caTools)
 ##########################################################################
 
 convergence_minimum <- 0.00001
+feathering <- "thrust" # thrust, power, none
 
 ##########################################################################
 
@@ -93,9 +97,9 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
 
 ##########################################################################
 
-dif_power <- geom$power
+keep_feathering <- TRUE
 
-while((abs(dif_power) / geom$power) > 0.01){ # feathering loop
+while(keep_feathering){ # feathering loop
 
   df <- data.frame()
   
@@ -220,9 +224,33 @@ while((abs(dif_power) / geom$power) > 0.01){ # feathering loop
   solidity <- (geom$blades * trapz(geom$radialStation, geom$chord)) / (pi * ((geom$diameter/2)^2))
   
   ### feathering stuff ###
-  dif_power <- geom$power - power
-  delta <- (dif_power / abs(dif_power)) * 0.01
-  geom$beta <- geom$beta + delta
+  if(feathering == "thrust"){
+    dif_thrust <- geom$thrust - thrust
+    delta <- (dif_thrust / abs(dif_thrust)) * 0.01
+    print("changing by thrust")
+    geom$beta <- geom$beta + delta
+    
+    if((abs(dif_thrust) / geom$thrust) > 0.01){
+      keep_feathering <- TRUE
+    }else{
+      keep_feathering <- FALSE
+    }
+    
+  }else if(feathering == "power"){
+    dif_power <- geom$power - power
+    delta <- (dif_power / abs(dif_power)) * 0.01
+    print("changing by power")
+    geom$beta <- geom$beta + delta
+    
+    if((abs(dif_power) / geom$power) > 0.01){
+      keep_feathering <- TRUE
+    }else{
+      keep_feathering <- FALSE
+    }
+    
+  }else{
+    break
+  }
 }
 
 ### print output ### 
@@ -240,6 +268,8 @@ colnames(minidf) <- c("station", "chord", "beta")
 
 print(minidf)
 
+print((sprintf("Total change in beta: %g deg", mean(geom$beta - minidf$beta))))
+
 ##########################################################################
 # plotting code
 
@@ -250,6 +280,6 @@ prop_geom_te <- prop_geom_te[seq(dim(prop_geom_te)[1],1),]
 prop_geom <- rbind(prop_geom_le, prop_geom_te)
 
 geom_plot <- ggplot(prop_geom, aes(x = r, y = chord)) + geom_path() + coord_fixed() + theme_bw() + 
-  geom_line(data = data.frame(chord = rep(0, length(stations)), r = stations), colour = "blue")
+  geom_line(data = data.frame(chord = rep(0, length(df$r)), r = df$r), colour = "blue")
 print(geom_plot)
 

@@ -1,6 +1,8 @@
 # Script created by Sam Hince
 # 02/04/2021
 
+rm(list = ls())
+
 library(caTools)
 library(tictoc)
 library(rjson)
