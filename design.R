@@ -4,6 +4,7 @@
 library(caTools)
 library(tictoc)
 library(rjson)
+library(ggplot2)
 
 ##########################################################################
 tic()
@@ -178,6 +179,21 @@ ls <- list(propName = name,
 
 exportJson <- toJSON(ls)
 write(exportJson, file = './propSpecs/DesignOutput.json')
+
+##########################################################################
+# plotting code
+
+prop_geom_le <- data.frame(chord = (c * (1/4)), r = stations)
+prop_geom_te <- data.frame(chord = (c * (-3/4)), r = stations)
+prop_geom_te <- prop_geom_te[seq(dim(prop_geom_te)[1],1),]
+
+prop_geom <- rbind(prop_geom_le, prop_geom_te)
+
+geom_plot <- ggplot(prop_geom, aes(x = r, y = chord)) + geom_path() + coord_fixed() + theme_bw() + 
+  geom_line(data = data.frame(chord = rep(0, length(stations)), r = stations), colour = "blue")
+print(geom_plot)
+
+##########################################################################
 
 toc()
 
