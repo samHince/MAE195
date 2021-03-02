@@ -12,19 +12,19 @@ tic()
 setwd("/home/sam/Documents/classGitRepos/MAE195")
 
 #givens
-name <- "Must"
-D <- 11.16667 #ft
-D_hud <- 1.5 #ftlibrary
+name <- "mustan_from_json"
+D <- 11.17 #ft
+D_hud <- 1.50 #ftlibrary
 B <- 4 #number of blades
 V <- 400 #mph 500
-power <- 1490 #BHp  
+power <- 795.73 #BHp  
 # thrust <- 0
-RPM <- 1250 #3200 # 1250
-rho <- 0.0011 #0.002378 20k ft
-kinetic_viscosity <- 2.9*10^(-4)
+RPM <- 1000 #3200 # 1250
+rho <- 0.00149620 #0.002378 20k ft
+kinetic_viscosity <- 0.00022927
 gamma <- 1.4 
 gas_const <- 1718
-temp <- 248.56 # from standart atm at 20k ft
+temp <- 464.514 # from standart atm at 20k ft
 airfoil <- "./propSpecs/NACA4415_RN500K_NCRIT9.csv"
 
 # settings
