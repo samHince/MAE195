@@ -1,3 +1,4 @@
+# Propeller analysis 
 # Script created by Sam Hince
 # 01/11/2021
 
@@ -12,21 +13,21 @@ rm(list = ls())
 
 # nomenclature:
 # V = velocity of aircraft
-# phi = angle...
-# Omega = 
+# phi = angle
+# Omega = angular
 # B = number of blade
 # r = radius along blade
 
 ##########################################################################
 
 convergence_minimum <- 0.00001
-feathering <- "thrust" # thrust, power, none
+feathering <- "none" # thrust, power, none
 
 ##########################################################################
 
 ## read in data from json
 setwd("/home/sam/Documents/classGitRepos/MAE195")
-geom <- fromJSON(file = './propSpecs/DesignOutput.json') # P51_Mustang.json DesignOutput.json
+geom <- fromJSON(file = './propSpecs/Cessna150.json') # P51_Mustang.json DesignOutput.json
 coef <- read.csv(file = './propSpecs/NACA4415_RN500K_NCRIT9.csv', header = TRUE)
 
 ##########################################################################
@@ -86,7 +87,7 @@ eqn_Cy <- function(Cl, Cd, phi){
 
 # equation 4:
 eqn_a <- function(sigma, varF, Cy, phi){
-	a <- ((sigma/(4*varF))*(Cy/(sin(phi)^2))) / (1+(sigma/(4*varF)*(Cy/(sin(phi)^2))))
+	a <- ((sigma/(4*varF))*(Cy/(sin(phi)^2))) / (1-(sigma/(4*varF)*(Cy/(sin(phi)^2)))) 
 	return(a)
 }
 
@@ -97,13 +98,28 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
 
 ##########################################################################
 
-
-
-### completx plotting loop ###
+### complex plotting loop ###
 #pl_df <- data.frame()
 #og_thrust <- geom$thrust
-#for(i in seq(1,1)){
+#for(i in seq(1,10)){
 #  geom$thrust <- og_thrust * (1 + (i * 0.05))
+  
+#pl_df <- data.frame()
+#for(i in seq(1,30)){
+#  geom$RPM <- geom$RPM + 50
+#  Omega <- (2 * pi * geom$RPM) / 60 
+  
+#pl_df <- data.frame()
+#V <- V - 40
+#og_thrust <- geom$thrust
+#for(i in seq(1,10)){
+#  V <- V + 10
+  
+#pl_df <- data.frame()
+#og_B <- B
+#for(i in seq(1,10)){
+#  B <- og_B + i
+#  geom$blades <- og_B + i
   
   keep_feathering <- TRUE
   total_d_beta <- 0
@@ -149,9 +165,9 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
     		Cy <- eqn_Cy(Cl, Cd, phi)
     		
     		#step 5
-    		phit <- atan((Xi)*tan(phi)) # atan or atan2? 
-    		f <- (B/2)*((1-(Xi)) / ((sin(phit))^2))
-    		varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
+    		phit <- atan((Xi)*tan(phi)) 
+    		f <- (B/2)*((1-(Xi)) / (sin(phit)))
+    		varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) 
     		
     		#step 6
     		sigma <- (B*c)/(2*pi*r) # local solidity
@@ -295,14 +311,14 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
 
   ##########################################################################
   
-  #record
-#  pl_df <- rbind(pl_df, data.frame(Cp, Ct, eta = efficiency, J = advance_ratio))
-#  pl_df <- rbind(pl_df, data.frame(percent = (i * 0.05), degrees = total_d_beta))
-  
-# } # end advanced plotting loop
+#  #record
+#  pl_df <- rbind(pl_df, data.frame(Cp, Ct, eta = efficiency, J = advance_ratio, B = B))
+#  pl_df <- rbind(pl_df, data.frame(T = geom$thrust, J = advance_ratio, velocity = V, degrees = total_d_beta))
+#  
+#} # end advanced plotting loop
 
 #coef <- 6
-#pl <- ggplot(pl_df, aes(x = J)) + 
+#pl <- ggplot(pl_df, aes(x = B)) + 
 #  geom_path(aes(y = Cp, colour = "Cp")) + 
 #  geom_point(aes(y = Cp, colour = "Cp")) + 
 #  geom_path(aes(y = Ct, colour = "Ct")) + 
@@ -312,21 +328,20 @@ eqn_aprime <- function(sigma, varF, Cx, phi){
 #  scale_y_continuous(
 #    # Features of the first axis
 #    name = "Cp, Ct",
-#    
+    
 #    # Add a second axis and specify its features
-#    sec.axis = sec_axis(~.*coef, name="Eta")
-#  ) +
+#    sec.axis = sec_axis(~.*coef, name="Eta")) +
 #  scale_colour_manual("", 
 #                         breaks = c("Cp", "Ct", "eta"),
 #                         values = c("blue", "red", "green")) +
 #  theme_bw()
 #print(pl)
 
-#pl <- ggplot(pl_df, aes(x = (percent * 100), y = degrees)) +
+#pl <- ggplot(pl_df, aes(x = J, y = degrees)) +
 #  geom_path() +
 #  geom_point() +
-#  ggtitle("Feathering for increased thrust") + # for the main title
-#  xlab("Percent thrust increse") + # for the x axis label
-#  ylab("Degrees feathered") + # for the y axis label
+#  #ggtitle("Feathering with Colocity") + # for the main title
+#  xlab("J") + # for the x axis label
+#  ylab("Feathing angle") + # for the y axis label
 #  theme_bw()
 #print(pl)

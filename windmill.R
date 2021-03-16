@@ -1,5 +1,6 @@
+# Windmill design 
 # Script created by Sam Hince
-# 02/04/2021
+# 04/12/2021
 
 rm(list = ls())
 
@@ -14,19 +15,19 @@ tic()
 setwd("/home/sam/Documents/classGitRepos/MAE195")
 
 #givens
-name <- "mustan_from_json"
+name <- "windmill"
 D <- 30 #ft
-D_hud <- 2 #ftlibrary
+D_hud <- 2 #ft
 B <- 3 #number of blades
 V <- 25 #mph 
 power <- 10 #BHp  
 # thrust <- 0
 RPM <- 158 #3200 # 1250
-rho <- 0.00149620 #0.002378 20k ft
+rho <- 0.002378 #
 kinetic_viscosity <- 0.00022927
 gamma <- 1.4 
 gas_const <- 1718
-temp <- 464.514 # from standart atm at 20k ft
+temp <- 464.514 # from standard atm at 20k ft
 airfoil <- "./propSpecs/NACA4415_RN500K_NCRIT9.csv"
 
 # settings
@@ -62,10 +63,11 @@ while(TRUE){
   for(r in stations){
     Xi <- r/R 
     
-    phit <- atan((V/(Omega*R)) * (1 + (zeta/2))) # atan or atan2? 
+    phit <- atan((V/(Omega*R)) * (1 + (zeta/2)))  
     
-    f <- (B/2)*((1-(Xi)) / (sin(phit))) # ((sin(phit))^2))
-    varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
+    f <- (B/2)*((1-(Xi)) / (sin(phit))) 
+    varF <- (2/pi) * atan((exp(2*f)-1)^(1/2)) 
+    # Ideal version: varF <- (2/pi) * acos(exp(-f)) 
     
     # useing r*tan(phi) = R*tan(phit) = const
     phi <- atan2(tan(phit),Xi) # phi <- atan2(R*tan(phit),r)
@@ -86,7 +88,7 @@ while(TRUE){
   Cd <- approx(x = coef$CL, y = coef$CD, xout = Cl, method="linear", ties=min)$y
   
   alpha <- alpha * (pi/180) # convert to radians
-  epsilon <- -1 * Cd/Cl # viscous effects
+  epsilon <- -1 * Cd/Cl # viscous effects # changed 
   
   #step 5
   a <- (zeta / 2) * (cos(df$phi)^2) * (1 - (epsilon*tan(df$phi)))
@@ -97,7 +99,7 @@ while(TRUE){
   
   #step 7
   c <- Wc/W
-  beta <- df$phi - alpha ######################################################################################
+  beta <- df$phi - alpha # changed 
   
   #step 8
   lambda <- V/(Omega*R)
@@ -192,7 +194,7 @@ prop_geom_te <- prop_geom_te[seq(dim(prop_geom_te)[1],1),]
 prop_geom <- rbind(prop_geom_le, prop_geom_te)
 
 geom_plot <- ggplot(prop_geom, aes(x = r, y = chord)) + geom_path() + coord_fixed() + theme_bw() + 
-  geom_line(data = data.frame(chord = rep(0, length(stations)), r = stations), colour = "blue")
+  geom_line(data = data.frame(chord = rep(0, length(stations)), r = stations), colour = "blue") + theme(axis.text.y=element_blank())
 print(geom_plot)
 
 ##########################################################################
